@@ -44,16 +44,16 @@ def translate_text(text, target_lang='en'):
 
 # List of supported languages
 SUPPORTED_LANGUAGES = {
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'it': 'Italian',
-    'pt': 'Portuguese',
-    'nl': 'Dutch',
-    'ru': 'Russian',
-    'ja': 'Japanese',
-    'ko': 'Korean',
-    'zh': 'Chinese'
+    'hi': 'Hindi',
+    'mr': 'Marathi',
+    'gu': 'Gujarati',
+    'ta': 'Tamil',
+    'kn': 'Kannada',
+    'te': 'Telugu',
+    'bn': 'Bengali',
+    'ml': 'Malayalam',
+    'pa': 'Punjabi',
+    'or': 'Odia'
 }
 
 @app.route('/')
