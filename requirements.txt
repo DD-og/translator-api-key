@@ -1,6 +1,6 @@
 deep-translator
 nltk
-rouge-score
+rouge
 flask
 gunicorn
 python-dotenv
