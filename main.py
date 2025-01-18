@@ -1,7 +1,13 @@
+from flask import Flask, request, jsonify
 from deep_translator import GoogleTranslator
 from nltk.translate.bleu_score import sentence_bleu
 from rouge import Rouge
 import nltk
+
+app = Flask(__name__)
+
+# Download required NLTK data at startup
+nltk.download('punkt')
 
 def calculate_metrics(reference, candidate):
     """
@@ -24,8 +30,7 @@ def calculate_metrics(reference, candidate):
             'rouge-l': rouge_scores[0]['rouge-l']['f']
         }
     except Exception as e:
-        print(f"Error calculating metrics: {str(e)}")
-        return None
+        return {'error': str(e)}
 
 def translate_text(text, target_lang='en'):
     """
@@ -35,47 +40,87 @@ def translate_text(text, target_lang='en'):
         translator = GoogleTranslator(source='auto', target=target_lang)
         return translator.translate(text)
     except Exception as e:
-        print(f"Error in translation: {str(e)}")
         return None
 
-def main():
-    # List of target languages (10 languages)
-    target_languages = {
-        'es': 'Spanish',
-        'fr': 'French',
-        'de': 'German',
-        'it': 'Italian',
-        'pt': 'Portuguese',
-        'nl': 'Dutch',
-        'ru': 'Russian',
-        'ja': 'Japanese',
-        'ko': 'Korean',
-        'zh': 'Chinese'
-    }
-    
-    # Get input text from user
-    input_text = input("Enter the text to translate: ")
-    print("\nTranslating to 10 languages and calculating metrics...\n")
-    
-    # Translate to each language and calculate metrics
-    for lang_code, lang_name in target_languages.items():
-        translation = translate_text(input_text, lang_code)
-        if translation:
-            print(f"\n{lang_name} translation:")
-            print(translation)
-            
-            # Calculate back translation for metrics
-            back_translation = translate_text(translation, 'en')
-            if back_translation:
-                metrics = calculate_metrics(input_text, back_translation)
-                if metrics:
-                    print(f"Metrics for {lang_name}:")
-                    print(f"BLEU Score: {metrics['bleu']:.4f}")
-                    print(f"ROUGE-1 F1: {metrics['rouge-1']:.4f}")
-                    print(f"ROUGE-2 F1: {metrics['rouge-2']:.4f}")
-                    print(f"ROUGE-L F1: {metrics['rouge-l']:.4f}")
-                    print("-" * 50)
+# List of supported languages
+SUPPORTED_LANGUAGES = {
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'nl': 'Dutch',
+    'ru': 'Russian',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese'
+}
 
-if __name__ == "__main__":
-    nltk.download('punkt')  # Download required NLTK data
-    main()
+@app.route('/')
+def home():
+    return jsonify({
+        'message': 'Welcome to the Translation API',
+        'supported_languages': SUPPORTED_LANGUAGES,
+        'endpoints': {
+            '/translate': 'POST request with {"text": "your text", "target_lang": "language_code"}',
+            '/translate_all': 'POST request with {"text": "your text"}'
+        }
+    })
+
+@app.route('/translate', methods=['POST'])
+def translate():
+    data = request.get_json()
+    
+    if not data or 'text' not in data or 'target_lang' not in data:
+        return jsonify({'error': 'Please provide both text and target_lang'}), 400
+    
+    text = data['text']
+    target_lang = data['target_lang']
+    
+    if target_lang not in SUPPORTED_LANGUAGES:
+        return jsonify({'error': 'Unsupported target language'}), 400
+    
+    translation = translate_text(text, target_lang)
+    if not translation:
+        return jsonify({'error': 'Translation failed'}), 500
+    
+    # Get back translation for metrics
+    back_translation = translate_text(translation, 'en')
+    metrics = calculate_metrics(text, back_translation) if back_translation else None
+    
+    return jsonify({
+        'original_text': text,
+        'translated_text': translation,
+        'language': SUPPORTED_LANGUAGES[target_lang],
+        'metrics': metrics
+    })
+
+@app.route('/translate_all', methods=['POST'])
+def translate_all():
+    data = request.get_json()
+    
+    if not data or 'text' not in data:
+        return jsonify({'error': 'Please provide text to translate'}), 400
+    
+    text = data['text']
+    results = {}
+    
+    for lang_code, lang_name in SUPPORTED_LANGUAGES.items():
+        translation = translate_text(text, lang_code)
+        if translation:
+            back_translation = translate_text(translation, 'en')
+            metrics = calculate_metrics(text, back_translation) if back_translation else None
+            
+            results[lang_code] = {
+                'language': lang_name,
+                'translated_text': translation,
+                'metrics': metrics
+            }
+    
+    return jsonify({
+        'original_text': text,
+        'translations': results
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
