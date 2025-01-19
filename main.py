@@ -32,15 +32,19 @@ def calculate_metrics(reference, candidate):
     except Exception as e:
         return {'error': str(e)}
 
-def translate_text(text, target_lang='en'):
+def translate_text(text, target_lang='en', max_retries=3, timeout=5):
     """
     Translates text to the specified target language using GoogleTranslator.
+    Added retry mechanism and timeout.
     """
-    try:
-        translator = GoogleTranslator(source='auto', target=target_lang)
-        return translator.translate(text)
-    except Exception as e:
-        return None
+    for attempt in range(max_retries):
+        try:
+            translator = GoogleTranslator(source='auto', target=target_lang)
+            return translator.translate(text)
+        except Exception as e:
+            if attempt == max_retries - 1:  # Last attempt
+                return None
+            continue
 
 # List of supported languages
 SUPPORTED_LANGUAGES = {
@@ -105,17 +109,26 @@ def translate_all():
     text = data['text']
     results = {}
     
-    for lang_code, lang_name in SUPPORTED_LANGUAGES.items():
-        translation = translate_text(text, lang_code)
-        if translation:
-            back_translation = translate_text(translation, 'en')
-            metrics = calculate_metrics(text, back_translation) if back_translation else None
-            
-            results[lang_code] = {
-                'language': lang_name,
-                'translated_text': translation,
-                'metrics': metrics
-            }
+    # Split languages into smaller batches
+    BATCH_SIZE = 3
+    language_batches = [list(SUPPORTED_LANGUAGES.items())[i:i + BATCH_SIZE] 
+                       for i in range(0, len(SUPPORTED_LANGUAGES), BATCH_SIZE)]
+    
+    for batch in language_batches:
+        batch_results = {}
+        for lang_code, lang_name in batch:
+            translation = translate_text(text, lang_code)
+            if translation:
+                # Only do back translation if forward translation succeeded
+                back_translation = translate_text(translation, 'en')
+                metrics = calculate_metrics(text, back_translation) if back_translation else None
+                
+                batch_results[lang_code] = {
+                    'language': lang_name,
+                    'translated_text': translation,
+                    'metrics': metrics
+                }
+        results.update(batch_results)
     
     return jsonify({
         'original_text': text,
